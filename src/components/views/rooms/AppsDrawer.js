@@ -27,6 +27,7 @@ import ScalarAuthClient from '../../../ScalarAuthClient';
 import ScalarMessaging from '../../../ScalarMessaging';
 import { _t } from '../../../languageHandler';
 import WidgetUtils from '../../../WidgetUtils';
+import equal from 'equals';
 
 // The maximum number of widgets that can be added in a room
 const MAX_WIDGETS = 2;
@@ -76,6 +77,7 @@ module.exports = React.createClass({
     },
 
     componentWillReceiveProps(newProps) {
+        console.warn("Props changed. Updating apps");
         // Room has changed probably, update apps
         this._updateApps();
     },
@@ -151,6 +153,8 @@ module.exports = React.createClass({
         if (ev.getRoomId() !== this.props.room.roomId || ev.getType() !== 'im.vector.modular.widgets') {
             return;
         }
+
+        console.warn("Room state event. Updating apps");
         this._updateApps();
     },
 
@@ -167,11 +171,60 @@ module.exports = React.createClass({
         });
     },
 
+    /**
+     * Return an array of app instances that do not exist in the current room state
+     * @param  {[Object]} apps All new app instances
+     * @return {[Object]} Non-existing app instances
+     */
+    _getNewApps: function(apps) {
+        const oldApps = this.state.apps;
+        return apps.filter((app) => {
+            let existing = false;
+            for (let a=0; a<oldApps.length; a++) {
+                const oldApp = oldApps[a];
+                if(equal(app, oldApp)) {
+                    existing = true;
+                    break;
+                }
+            }
+            return !existing;
+        });
+    },
+
+    /**
+     * Returns true if any of the passed apps were created by the current user
+     * @param  {[Object]} apps Apps to check
+     * @return {Boolean}      [description]
+     */
+    _didUserCreateApps(apps) {
+        const userCreatedApps = apps.filter((app) => {
+            if (!app || !app.creatorUserId) {
+                return false;
+            }
+            return app.creatorUserId === this.props.userId;
+        });
+        return userCreatedApps && userCreatedApps.length>0;
+    },
+
     _updateApps: function() {
         const apps = this._getApps();
-        this.setState({
-            apps: apps,
-        });
+        if (!equal(apps, this.state.apps)) {
+            console.warn("Updating apps", apps, this.state.apps);
+            const newState = {
+                apps: apps,
+            };
+            const newApps = this._getNewApps(apps);
+            if (newApps && newApps.length > 0) {
+                console.warn("There are new apps", apps, newApps);
+            }
+            if (this._didUserCreateApps(newApps)) {
+                console.warn("Current user created new app");
+                newState.showApps = true;
+            }
+            this.setState(newState);
+        }else{
+            console.warn("Not updating apps");
+        }
     },
 
     _canUserModify: function() {
